@@ -3,21 +3,23 @@
 ## Install
 
 ```sh
-uv tool install -e ~/Desktop/repos/view
+go install github.com/mcembalest/view@main
 ```
+
+Requires [uv](https://docs.astral.sh/uv/getting-started/installation/). The first run downloads models and libraries (~2GB).
 
 ## Run
 
 ```sh
-view [folder]                 # default: current folder
-view folder -m clip -m minilm # several models
-view folder --jev             # add TypeSafe Jev answers (needs TYPESAFE_API_KEY)
-view folder -y                # skip confirmation
+view [folder]                  # default: current folder
+view folder -m clip -m minilm  # several models
+view folder --jev              # add TypeSafe Jev answers (needs TYPESAFE_API_KEY)
+view folder -y                 # skip confirmation
 ```
 
 Scan prompt: `enter` index, `l` list files, `e` edit `.view/ignore`, `q` quit.
 
-Models: `mobileclip2` (default), `siglip2`, `clip`, `qwen3-vl`, `minilm`, `qwen3-text`, any sentence-transformers id, or `open_clip:ARCH/PRETRAINED`.
+Models: `siglip2` (default), `mobileclip2`, `clip`, `qwen3-vl`, `minilm`, `qwen3-text`, any sentence-transformers id, or `open_clip:ARCH/PRETRAINED`.
 
 Jev questions: `.view/jev.json`.
 
@@ -37,3 +39,9 @@ Output: `folder/.view/`.
 | preview | hover point or tile |
 | pin, reveal, open | click point or tile |
 | clear | `esc` |
+
+## Develop
+
+```sh
+go-kit dev -- folder
+```

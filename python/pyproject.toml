@@ -1,0 +1,20 @@
+[project]
+name = "view-python"
+version = "0"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "numpy",
+    "pillow",
+    "pillow-heif",
+    "torch",
+    "open_clip_torch",
+    "timm",
+    "sentence-transformers",
+    "umap-learn @ git+https://github.com/lmcinnes/umap@c6a17a66d8c4d48530fde3df12b4229f2df27805",
+    "evoc",
+    "matplotlib",  # evoc imports it
+    "pyobjc-framework-Vision; sys_platform == 'darwin'",
+]
+
+[tool.uv]
+package = false

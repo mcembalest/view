@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit && esbuild src/app.ts --bundle --minify --format=esm --outfile=dist/app.js && cp index.html style.css dist/"
+  },
+  "dependencies": {"three": "0.186.1"},
+  "devDependencies": {"@types/three": "0.186.0", "esbuild": "0.28.2", "typescript": "7.0.2"}
+}

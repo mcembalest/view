@@ -1,0 +1,18 @@
+version: 2
+project_name: view
+builds:
+  - main: .
+    binary: view
+    env: [CGO_ENABLED=0]
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.gokitVersion=v{{.Version}} -X main.gokitCommit={{.FullCommit}}
+archives:
+  - formats: [tar.gz]
+    files: [README.md, DEPENDENCIES.md, LICENSE*]
+checksum:
+  name_template: checksums.txt
+changelog:
+  sort: asc

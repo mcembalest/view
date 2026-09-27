@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>view</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="box" hidden></div>
+<header>
+  <b>view</b> <span id="where"></span>
+  <span class="seg" id="dims"><button data-v="3">3D</button><button data-v="2">2D</button></span>
+  <select id="model" title="embedding model"></select>
+</header>
+<aside>
+  <input id="q" placeholder="filter names & folders  ·  ⏎ search by meaning" autocomplete="off" spellcheck="false">
+  <label>color <select id="color"></select></label>
+  <div id="legend"></div>
+  <div id="status"></div>
+  <div id="grid"></div>
+</aside>
+<div id="tip" hidden></div>
+<footer id="hint"></footer>
+<script type="module" src="app.js"></script>
+</body>
+</html>
