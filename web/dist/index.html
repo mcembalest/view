@@ -14,7 +14,25 @@
   <b>view</b> <span id="where"></span>
   <span class="seg" id="dims"><button data-v="3">3D</button><button data-v="2">2D</button></span>
   <select id="model" title="embedding model"></select>
+  <button id="help-btn" title="controls (?)">?</button>
 </header>
+<div id="help" hidden>
+  <table>
+    <tr><td>orbit · pan · zoom</td><td>drag · right-drag · scroll (2D: drag pans)</td></tr>
+    <tr><td>2D ↔ 3D</td><td><kbd>space</kbd></td></tr>
+    <tr><td>filter by name or folder</td><td>type in the search box · <kbd>-word</kbd> excludes</td></tr>
+    <tr><td>search by meaning</td><td>type, then <kbd>enter</kbd></td></tr>
+    <tr><td>color / group</td><td>color menu</td></tr>
+    <tr><td>show only a group</td><td>click a legend row · <kbd>shift</kbd>-click adds</td></tr>
+    <tr><td>select a region</td><td><kbd>shift</kbd>-drag</td></tr>
+    <tr><td>preview</td><td>hover a point or tile</td></tr>
+    <tr><td>pin · reveal · open</td><td>click a point or tile</td></tr>
+    <tr><td>copy paths of the set</td><td>copy paths</td></tr>
+    <tr><td>focus search</td><td><kbd>/</kbd></td></tr>
+    <tr><td>unpin · clear</td><td><kbd>esc</kbd></td></tr>
+    <tr><td>compare models</td><td>model menu (run view with several <kbd>-m</kbd>)</td></tr>
+  </table>
+</div>
 <aside>
   <input id="q" placeholder="filter names & folders  ·  ⏎ search by meaning" autocomplete="off" spellcheck="false">
   <label>color <select id="color"></select></label>

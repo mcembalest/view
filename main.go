@@ -17,21 +17,30 @@ import (
 //go:embed web/dist
 var webFS embed.FS
 
-const usage = `usage: view [folder] [-m model]... [--jev] [-y] [--port N] [--no-open]
+func usage() string {
+	return `usage: view [folder] [flags]
 
-  folder      folder to view (default: current folder)
-  -m model    embedding model; repeat to compare several (default: siglip2)
-              aliases: siglip2, mobileclip2, clip, qwen3-vl, minilm, qwen3-text
-              or any sentence-transformers id, or open_clip:ARCH/PRETRAINED
-  --jev       ask TypeSafe Jev the questions in .view/jev.json (needs TYPESAFE_API_KEY)
-  -y          skip the index confirmation
-  --port N    port (default: any free port)
-  --no-open   don't open a browser tab
+Index a folder's text and image files, embed them, and explore them as a map in the browser.
+Before anything runs, view lists what it will index and download; press enter to go on.
+
+  folder        folder to view (default: current folder)
+  -m model      embedding model for the map; repeat to compare several (default: mobileclip2-s0)
+` + modelHelp() + `                or any sentence-transformers id, or open_clip:ARCH/PRETRAINED
+  -t model      also search the text in files and images with this text model (e.g. qwen3-text)
+  --jev         ask TypeSafe Jev the questions in folder/.view/jev.json (needs TYPESAFE_API_KEY)
+  -y            skip the confirmation
+  --port N      port (default: any free port)
+  --no-open     don't open a browser tab
+
+At the confirmation: enter = index, l = list files, e = edit folder/.view/ignore (gitignore syntax), q = quit.
+Everything view writes goes in folder/.view/. Press ? in the browser for controls.
 `
+}
 
 type options struct {
 	folder string
 	models []string
+	text   string
 	jev    bool
 	yes    bool
 	port   int
@@ -51,7 +60,7 @@ func parseArgs(args []string) (options, error) {
 		}
 		switch a {
 		case "-h", "--help":
-			fmt.Print(usage)
+			fmt.Print(usage())
 			os.Exit(0)
 		case "-m", "--model":
 			v, err := next()
@@ -59,6 +68,12 @@ func parseArgs(args []string) (options, error) {
 				return o, err
 			}
 			o.models = append(o.models, v)
+		case "-t", "--text-model":
+			v, err := next()
+			if err != nil {
+				return o, err
+			}
+			o.text = v
 		case "--jev":
 			o.jev = true
 		case "-y", "--yes":
@@ -81,7 +96,7 @@ func parseArgs(args []string) (options, error) {
 		}
 	}
 	if len(o.models) == 0 {
-		o.models = []string{"siglip2"}
+		o.models = []string{"mobileclip2-s0"}
 	}
 	return o, nil
 }
@@ -90,7 +105,7 @@ func main() {
 	gokitStartup()
 	o, err := parseArgs(os.Args[1:])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "view: %v\n\n%s", err, usage)
+		fmt.Fprintf(os.Stderr, "view: %v (view -h for help)\n", err)
 		os.Exit(2)
 	}
 	if err := run(o); err != nil {
@@ -112,6 +127,12 @@ func run(o options) error {
 	}
 	extra := func(files []File) []string {
 		lines := []string{"models    " + strings.Join(o.models, ", "), "writes    " + filepath.Join(root, ".view") + "/"}
+		if o.text != "" {
+			lines[0] += " · text search: " + o.text
+		}
+		if d := downloadLine(append(append([]string{}, o.models...), o.text)); d != "" {
+			lines = append(lines, d)
+		}
 		if o.jev {
 			toks, cost := jevEstimate(files, jevQuestions(root))
 			lines = append(lines, fmt.Sprintf("jev       ~%.1fM tokens ≈ $%.2f; sends file names, text, and text read from images to TypeSafe", float64(toks)/1e6, cost))
@@ -132,7 +153,7 @@ func run(o options) error {
 	for i, f := range files {
 		rows[i] = []any{f.Rel, f.Kind, f.Size, f.Mtime}
 	}
-	if err := w.Call(map[string]any{"cmd": "build", "root": root, "files": rows, "models": o.models}, nil); err != nil {
+	if err := w.Call(map[string]any{"cmd": "build", "root": root, "files": rows, "models": o.models, "text_model": o.text}, nil); err != nil {
 		return err
 	}
 

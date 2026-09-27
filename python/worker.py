@@ -1,9 +1,9 @@
 """view's ML worker, embedded in the Go binary and run with uv (see gokit_python.go). JSON lines over stdin/stdout.
 
-  {"cmd": "build", "root": ..., "files": [[rel, kind, size, mtime], ...], "models": [...]}
+  {"cmd": "build", "root": ..., "files": [[rel, kind, size, mtime], ...], "models": [...], "text_model": null | name}
       thumbnails + OCR for images, embeddings per model, 3D/2D layouts, EVoC clusters -> root/.view/
   {"cmd": "search", "q": ..., "model": ...}
-      -> {"results": [[index, score], ...]}  max of: looks like (model), says (text model)
+      -> {"results": [[index, score], ...]}  max of: looks like (model), says (text model, if given)
 
 Progress goes to stderr.
 """
@@ -32,14 +32,14 @@ except ImportError:
     pass
 
 CACHE_VERSION = 2
-TEXT_MODEL = "Qwen/Qwen3-Embedding-0.6B"  # reads what files say: text files, OCR of images, names
 ALIASES = {
+    "mobileclip2-s0": "open_clip:MobileCLIP2-S0/dfndr2b",
     "mobileclip2": "open_clip:MobileCLIP2-S4/dfndr2b",
     "siglip2": "open_clip:ViT-SO400M-16-SigLIP2-384/webli",
     "clip": "sentence-transformers/clip-ViT-B-32",
     "qwen3-vl": "Qwen/Qwen3-VL-Embedding-2B",
     "minilm": "sentence-transformers/all-MiniLM-L6-v2",
-    "qwen3-text": TEXT_MODEL,
+    "qwen3-text": "Qwen/Qwen3-Embedding-0.6B",
 }
 
 
@@ -310,25 +310,27 @@ def zscore_by_kind(s, kinds):
 
 
 class Index:
-    """Search = max of two signals per file: what it looks like (the map's model) and what it says (text model on
-    text-file content, text read from images, and names). Images with no readable text only use the first."""
+    """Search = max of two signals per file: what it looks like (the map's model) and, with a text model, what it
+    says (text-file content, text read from images, and names). Images with no readable text only use the first."""
 
     def __init__(self, files, ocr):
         self.kinds = np.array([f[1] for f in files])
         self.says_something = np.array([f[1] == "text" or len(ocr.get(key(f), "")) > 15 for f in files])
-        self.looks, self.says = {}, None
+        self.looks, self.says, self.text_model = {}, None, None
 
     def search(self, q, model, k=200):
         def sim(name, X):
             v = np.asarray(load(name).texts([q], query=True), np.float32)[0]
             return zscore_by_kind(X @ (v / np.linalg.norm(v)), self.kinds)
 
-        score = np.maximum(sim(model, self.looks[model]), np.where(self.says_something, sim(TEXT_MODEL, self.says), -9))
+        score = sim(model, self.looks[model])
+        if self.text_model:
+            score = np.maximum(score, np.where(self.says_something, sim(self.text_model, self.says), -9))
         top = np.argsort(-score)[:k]
         return [[int(i), round(float(score[i]), 3)] for i in top]
 
 
-def build(root, files, models):
+def build(root, files, models, text_model=None):
     root = Path(root)
     out = root / ".view" / "map"
     out.mkdir(parents=True, exist_ok=True)
@@ -346,7 +348,8 @@ def build(root, files, models):
         np.concatenate([P3.ravel(), P2.ravel()]).astype(np.float32).tofile(out / f"{s}.bin")
         (out / f"{s}.json").write_text(json.dumps({"clusters": levels, "duplicates": dupes}))
         (out / f"{s}.sig").write_text(sig)
-    index.says = embed(root, files, TEXT_MODEL, ocr, as_text=True)
+    if text_model:
+        index.says, index.text_model = embed(root, files, text_model, ocr, as_text=True), text_model
     return index
 
 
@@ -356,7 +359,7 @@ def main():
         req = json.loads(line)
         try:
             if req["cmd"] == "build":
-                index = build(req["root"], req["files"], req["models"])
+                index = build(req["root"], req["files"], req["models"], req.get("text_model") or None)
                 resp = {"ok": True}
             elif req["cmd"] == "search":
                 resp = {"results": index.search(req["q"], req["model"])}

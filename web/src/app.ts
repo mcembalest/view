@@ -106,7 +106,7 @@ function go(model: string, dims: 2 | 3) {
   document.querySelectorAll<HTMLButtonElement>('#dims button').forEach(b => b.classList.toggle('on', +b.dataset.v! === dims));
   controls.enableRotate = dims === 3;
   controls.mouseButtons.LEFT = dims === 3 ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
-  $('#hint').innerHTML = `${dims === 3 ? 'drag to orbit · right-drag to pan' : 'drag to pan'} · scroll to zoom · <kbd>shift</kbd>-drag to select · <kbd>space</kbd> 2D/3D · <kbd>/</kbd> search`;
+  $('#hint').innerHTML = `${dims === 3 ? 'drag to orbit · right-drag to pan' : 'drag to pan'} · scroll to zoom · <kbd>shift</kbd>-drag to select · <kbd>space</kbd> 2D/3D · <kbd>?</kbd> help`;
   $<HTMLSelectElement>('#model').value = model;
   saveHash();
 }
@@ -269,12 +269,16 @@ addEventListener('pointerup', e => {
 });
 
 // ---------- controls ----------
+const help = $('#help'), helpBtn = $('#help-btn');
+const toggleHelp = (show: boolean = help.hidden === true) => { help.hidden = !show; helpBtn.classList.toggle('on', show); };
+helpBtn.onclick = () => toggleHelp();
 addEventListener('keydown', e => {
   const tag = (e.target as HTMLElement).tagName;
   if (tag === 'INPUT' || tag === 'SELECT') return;
+  if (e.key === '?') { toggleHelp(); return; }
   if (e.code === 'Space') { e.preventDefault(); go(S.model, S.dims === 3 ? 2 : 3); }
   if (e.key === '/') { e.preventDefault(); q.focus(); }
-  if (e.key === 'Escape') pinned >= 0 ? pin(-1) : clear();
+  if (e.key === 'Escape') !help.hidden ? toggleHelp(false) : pinned >= 0 ? pin(-1) : clear();
 });
 document.querySelectorAll<HTMLButtonElement>('#dims button').forEach(b => b.onclick = () => go(S.model, +b.dataset.v! as 2 | 3));
 const msel = $<HTMLSelectElement>('#model'), csel = $<HTMLSelectElement>('#color');
