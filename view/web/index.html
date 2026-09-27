@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>view</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<header>
+  <div id="title"><b>view</b> <span id="where"></span></div>
+  <div class="seg" id="dims" role="group" aria-label="projection">
+    <button data-d="3" class="on">3D</button><button data-d="2">2D</button>
+  </div>
+  <label class="colorby">color <select id="colorby"></select></label>
+</header>
+<aside id="legend"></aside>
+<div id="tip" hidden></div>
+<footer id="hint">drag to orbit · right-drag to pan · scroll to zoom · <kbd>space</kbd> 2D/3D · click a point to pin</footer>
+<script type="module" src="app.js"></script>
+</body>
+</html>
