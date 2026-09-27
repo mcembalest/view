@@ -53,12 +53,26 @@ def project(X: np.ndarray, seed: int | None = 0) -> tuple[np.ndarray, np.ndarray
     return P3.astype(np.float32), P2.astype(np.float32)
 
 
-def cluster(X: np.ndarray) -> list[np.ndarray]:
-    """EVoC (McInnes) multi-granularity clusters, finest first. -1 = noise."""
-    if len(X) < 20:
-        return [np.zeros(len(X), dtype=int)]
+def cluster(X: np.ndarray) -> tuple[list[np.ndarray], list[int | None]]:
+    """EVoC (McInnes) clusters at several granularities, finest first (-1 = noise), plus near-duplicate groups."""
+    n = len(X)
+    if n < 20:
+        return [np.zeros(n, dtype=int)], [None] * n
     import evoc
 
     c = evoc.EVoC(random_state=0)
     c.fit_predict(X)
-    return [np.asarray(layer) for layer in c.cluster_layers_]
+    parent = list(range(n))  # union-find over duplicate pairs
+
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for a, b in c.duplicates_:
+        parent[root(a)] = root(b)
+    in_pair = {i for pair in c.duplicates_ for i in pair}
+    number = {}  # roots -> 1, 2, 3…
+    dupes = [number.setdefault(root(i), len(number) + 1) if i in in_pair else None for i in range(n)]
+    return [np.asarray(layer) for layer in c.cluster_layers_], dupes

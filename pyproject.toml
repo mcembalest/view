@@ -15,7 +15,6 @@ dependencies = [
     "evoc",
     "matplotlib",  # evoc imports it at load time
     "pathspec",
-    "typesafe-sdk",
 ]
 
 [project.scripts]

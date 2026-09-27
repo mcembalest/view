@@ -27,7 +27,7 @@ DEFAULT_IGNORE = """\
 """
 
 
-@dataclass
+@dataclass(frozen=True)
 class File:
     rel: str
     kind: str  # "image" | "text"

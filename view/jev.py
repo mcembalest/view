@@ -1,14 +1,17 @@
-"""Optional: ask TypeSafe's Jev typed questions about every file (text only, so images are described
-by filename, folder and EXIF metadata). Answers become hover fields and color-by options.
+"""Optional: ask TypeSafe Jev typed questions about every file. Answers become hover fields and colors.
 
-Questions live in .view/jev.json, in the same shape as the HTTP API's `questions` map.
+Jev reads text only: text files send their content; images send name, folder, and EXIF.
+Questions live in .view/jev.json in the API's own `questions` shape (https://docs.typesafe.ai/api).
 """
 
-import asyncio
 import hashlib
 import json
 import os
 import sys
+import time
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -17,9 +20,9 @@ from PIL import ExifTags, Image
 from .embed import key, read_text
 from .scan import File
 
+URL = "https://api.typesafe.ai/v1/systemone"
 PRICE_PER_MTOK = 0.042
-TEXT_STATE_CHARS = 6000
-CONCURRENCY = 16
+TEXT_CHARS = 6000
 
 DEFAULT_QUESTIONS = {
     "kind": {
@@ -35,33 +38,24 @@ DEFAULT_QUESTIONS = {
             "other": None,
         },
     },
-    "work": {
-        "type": "noul",
-        "instructions": "Is this file most likely related to work, research, or study (rather than personal life)?",
-    },
+    "work": {"type": "noul", "instructions": "Is this file most likely related to work, research, or study (rather than personal life)?"},
 }
 
 
-def load_env(start: Path):
-    """Read TYPESAFE_API_KEY from a .env next to the viewed folder, the cwd, or the view repo."""
-    if os.environ.get("TYPESAFE_API_KEY"):
-        return
-    for d in (start, Path.cwd(), Path(__file__).resolve().parent.parent):
-        env = d / ".env"
-        if env.exists():
-            for line in env.read_text().splitlines():
+def load_env(folder: Path):
+    """TYPESAFE_API_KEY from the environment, or a .env in the viewed folder, cwd, or the view repo."""
+    for d in (folder, Path.cwd(), Path(__file__).resolve().parent.parent):
+        if os.environ.get("TYPESAFE_API_KEY"):
+            return
+        if (d / ".env").exists():
+            for line in (d / ".env").read_text().splitlines():
                 k, _, v = line.partition("=")
                 if k.strip() == "TYPESAFE_API_KEY":
                     os.environ["TYPESAFE_API_KEY"] = v.strip().strip("'\"")
-                    return
-
-
-def questions_path(root: Path) -> Path:
-    return root / ".view" / "jev.json"
 
 
 def load_questions(root: Path) -> dict:
-    p = questions_path(root)
+    p = root / ".view" / "jev.json"
     if not p.exists():
         p.parent.mkdir(exist_ok=True)
         p.write_text(json.dumps(DEFAULT_QUESTIONS, indent=2))
@@ -71,82 +65,60 @@ def load_questions(root: Path) -> dict:
 def exif(path: Path) -> dict:
     try:
         im = Image.open(path)
-        out = {"width": im.width, "height": im.height}
         ex = im.getexif()
-        tags = {ExifTags.TAGS.get(k, k): v for k, v in ex.items()}
-        tags.update({ExifTags.TAGS.get(k, k): v for k, v in ex.get_ifd(0x8769).items()})
-        for t in ("DateTimeOriginal", "Make", "Model", "Software", "LensModel"):
-            if t in tags:
-                out[t] = str(tags[t]).strip("\x00 ")
-        if ex.get_ifd(0x8825):
-            out["has_gps"] = True
-        return out
+        tags = {ExifTags.TAGS.get(k, k): v for k, v in {**ex, **ex.get_ifd(0x8769)}.items()}
+        out = {"width": im.width, "height": im.height}
+        out.update({t: str(tags[t]).strip("\x00 ") for t in ("DateTimeOriginal", "Make", "Model", "Software") if t in tags})
+        return out | ({"has_gps": True} if ex.get_ifd(0x8825) else {})
     except Exception:
         return {}
 
 
 def state(root: Path, f: File) -> dict:
-    s = {
-        "filename": f.rel.rsplit("/", 1)[-1],
-        "folder": f.rel.rsplit("/", 1)[0] if "/" in f.rel else "",
-        "file_type": f.ext,
-        "modified": datetime.fromtimestamp(f.mtime).strftime("%Y-%m-%d"),
-        "size_kb": round(f.size / 1024),
-    }
-    if f.kind == "image":
-        s["image_metadata"] = exif(root / f.rel)
-    else:
-        s["content"] = read_text(root / f.rel)[:TEXT_STATE_CHARS]
-    return s
+    folder, _, name = f.rel.rpartition("/")
+    s = {"filename": name, "folder": folder, "modified": datetime.fromtimestamp(f.mtime).strftime("%Y-%m-%d"), "size_kb": round(f.size / 1024)}
+    return s | ({"image_metadata": exif(root / f.rel)} if f.kind == "image" else {"content": read_text(root / f.rel)[:TEXT_CHARS]})
 
 
-def estimate(root: Path, files: list[File], questions: dict) -> tuple[int, float]:
-    q = len(json.dumps(questions)) // 4
-    toks = sum((min(f.size, TEXT_STATE_CHARS) if f.kind == "text" else 300) // 4 + q + 60 for f in files)
+def estimate(files: list[File], questions: dict) -> tuple[int, float]:
+    per_q = len(json.dumps(questions)) // 4 + 60
+    toks = sum((min(f.size, TEXT_CHARS) if f.kind == "text" else 300) // 4 + per_q for f in files)
     return toks, toks / 1e6 * PRICE_PER_MTOK
 
 
-def _question(d: dict):
-    import typesafe_sdk as ts
-
-    d = dict(d)
-    return {"choice": ts.Choice, "noul": ts.Noul, "score": ts.Score}[d.pop("type")](**d)
-
-
-def _answer(a) -> float | str:
-    return {"choice": lambda: a.choice, "noul": lambda: round(a.noul, 3), "score": lambda: round(a.score, 3)}[a.type]()
+def ask(body: dict) -> dict:
+    req = urllib.request.Request(URL, json.dumps(body).encode(), {
+        "Authorization": f"Bearer {os.environ['TYPESAFE_API_KEY']}", "Content-Type": "application/json"})
+    for attempt in range(6):
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return {k: a[a["type"]] for k, a in json.load(r)["answers"].items()}
+        except urllib.error.HTTPError as e:
+            if e.code not in (429, 500, 502, 503, 529) or attempt == 5:
+                raise
+            time.sleep(2 ** attempt)
 
 
 def run(root: Path, files: list[File]) -> dict[str, dict]:
-    """Return {file.rel: {question: answer}}; cached by file key + question set."""
-    import typesafe_sdk as ts
-
+    """{file.rel: {question: answer}}, cached per file and question set."""
     questions = load_questions(root)
     qhash = hashlib.sha1(json.dumps(questions, sort_keys=True).encode()).hexdigest()[:10]
     cpath = root / ".view" / "jev_cache.json"
     cache = json.loads(cpath.read_text()) if cpath.exists() else {}
-    todo = [f for f in files if f"{key(f)}|{qhash}" not in cache]
-    print(f"\n  jev  {len(todo):,} new · {len(files) - len(todo):,} cached   questions: {', '.join(questions)}")
+    ck = lambda f: f"{key(f)}|{qhash}"
+    todo = [f for f in files if ck(f) not in cache]
+    print(f"\n  jev  {len(todo):,} to ask · {len(files) - len(todo):,} cached · questions: {', '.join(questions)}")
 
-    async def go():
-        sem, done = asyncio.Semaphore(CONCURRENCY), 0
-        qs = {k: _question(v) for k, v in questions.items()}
-        async with ts.AsyncTypeSafeClient() as client:
-            async def one(f):
-                nonlocal done
-                async with sem:
-                    try:
-                        r = await client.system_one(state=state(root, f), questions=qs)
-                        cache[f"{key(f)}|{qhash}"] = {k: _answer(a) for k, a in r.answers.items()}
-                    except ts.TypeSafeError as e:
-                        print(f"\n    jev failed on {f.rel}: {e}", file=sys.stderr)
-                    done += 1
-                    print(f"\r    {done:,}/{len(todo):,}", end="", flush=True)
+    def one(f):
+        try:
+            cache[ck(f)] = ask({"model": "jev-latest", "state": state(root, f), "questions": questions})
+        except Exception as e:
+            print(f"\n    jev failed on {f.rel}: {e}", file=sys.stderr)
 
-            await asyncio.gather(*(one(f) for f in todo))
-        print()
-
+    with ThreadPoolExecutor(16) as pool:
+        for n, _ in enumerate(pool.map(one, todo), 1):
+            print(f"\r    {n:,}/{len(todo):,}", end="", flush=True)
     if todo:
-        asyncio.run(go())
+        print()
         cpath.write_text(json.dumps(cache))
-    return {f.rel: cache.get(f"{key(f)}|{qhash}", {}) for f in files}
+    return {f.rel: cache.get(ck(f), {}) for f in files}

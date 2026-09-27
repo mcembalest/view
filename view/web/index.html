@@ -10,16 +10,21 @@
 </head>
 <body>
 <canvas id="gl"></canvas>
+<div id="box" hidden></div>
 <header>
-  <div id="title"><b>view</b> <span id="where"></span></div>
-  <div class="seg" id="dims" role="group" aria-label="projection">
-    <button data-d="3" class="on">3D</button><button data-d="2">2D</button>
-  </div>
-  <label class="colorby">color <select id="colorby"></select></label>
+  <b>view</b> <span id="where"></span>
+  <span class="seg" id="dims"><button data-v="3">3D</button><button data-v="2">2D</button></span>
+  <select id="model" title="embedding model"></select>
 </header>
-<aside id="legend"></aside>
+<aside>
+  <input id="q" placeholder="filter names & folders  ·  ⏎ search by meaning" autocomplete="off" spellcheck="false">
+  <label>color <select id="color"></select></label>
+  <div id="legend"></div>
+  <div id="status"></div>
+  <div id="grid"></div>
+</aside>
 <div id="tip" hidden></div>
-<footer id="hint">drag to orbit · right-drag to pan · scroll to zoom · <kbd>space</kbd> 2D/3D · click a point to pin</footer>
+<footer id="hint"></footer>
 <script type="module" src="app.js"></script>
 </body>
 </html>
