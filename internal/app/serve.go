@@ -1,9 +1,8 @@
-package main
+package app
 
 import (
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"net"
 	"net/http"
 	"os/exec"
@@ -17,7 +16,7 @@ import (
 func serve(root string, files []File, w *kit.Worker, o options) error {
 	mapDir := filepath.Join(root, ".view", "map")
 	ocr := loadOCR(root)
-	dist, _ := fs.Sub(webFS, "web/dist")
+
 	file := func(r *http.Request) (File, bool) {
 		i, err := strconv.Atoi(r.PathValue("i"))
 		if err != nil || i < 0 || i >= len(files) {
@@ -26,7 +25,7 @@ func serve(root string, files []File, w *kit.Worker, o options) error {
 		return files[i], true
 	}
 	mux := http.NewServeMux()
-	mux.Handle("GET /", http.FileServerFS(dist))
+	mux.Handle("GET /", http.FileServerFS(webFS))
 	mux.HandleFunc("GET /data/{name}", func(rw http.ResponseWriter, r *http.Request) {
 		http.ServeFile(rw, r, filepath.Join(mapDir, filepath.Base(r.PathValue("name"))))
 	})
