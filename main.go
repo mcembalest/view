@@ -12,10 +12,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/mcembalest/go-kit/kit"
 )
 
 //go:embed web/dist
 var webFS embed.FS
+
+//go:embed python
+var pythonFS embed.FS
 
 func usage() string {
 	return `usage: view [folder] [flags]
@@ -31,6 +36,7 @@ Before anything runs, view lists what it will index and download; press enter to
   -y            skip the confirmation
   --port N      port (default: any free port)
   --no-open     don't open a browser tab
+  -v            version
 
 At the confirmation: enter = index, l = list files, e = edit folder/.view/ignore (gitignore syntax), q = quit.
 Everything view writes goes in folder/.view/. Press ? in the browser for controls.
@@ -59,6 +65,9 @@ func parseArgs(args []string) (options, error) {
 			return args[i], nil
 		}
 		switch a {
+		case "-v", "--version":
+			fmt.Println("view", kit.Version())
+			os.Exit(0)
 		case "-h", "--help":
 			fmt.Print(usage())
 			os.Exit(0)
@@ -102,7 +111,6 @@ func parseArgs(args []string) (options, error) {
 }
 
 func main() {
-	gokitStartup()
 	o, err := parseArgs(os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "view: %v (view -h for help)\n", err)
@@ -144,7 +152,7 @@ func run(o options) error {
 		return err
 	}
 
-	w, err := gokitPython()
+	w, err := kit.Python(pythonFS, "view")
 	if err != nil {
 		return err
 	}

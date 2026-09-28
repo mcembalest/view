@@ -82,12 +82,13 @@ func downloadLine(models []string) string {
 	return fmt.Sprintf("downloads ~%s once: %s", sizeLabel(total), strings.Join(parts, ", "))
 }
 
-// pythonReady reports whether some version of the worker environment is already installed.
+// pythonReady reports whether the worker's Python environment is installed (see kit.Python).
 func pythonReady() bool {
 	base, err := os.UserCacheDir()
-	if err != nil {
-		return false
-	}
-	venvs, _ := filepath.Glob(filepath.Join(base, "view", "python-*", ".venv"))
-	return len(venvs) > 0
+	return err == nil && exists(filepath.Join(base, "view", "python", ".venv"))
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

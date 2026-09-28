@@ -8,10 +8,13 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
+
+	"github.com/mcembalest/go-kit/kit"
 )
 
-func serve(root string, files []File, w *gokitPythonWorker, o options) error {
+func serve(root string, files []File, w *kit.Worker, o options) error {
 	mapDir := filepath.Join(root, ".view", "map")
 	ocr := loadOCR(root)
 	dist, _ := fs.Sub(webFS, "web/dist")
@@ -76,11 +79,15 @@ func serve(root string, files []File, w *gokitPythonWorker, o options) error {
 			http.NotFound(rw, r)
 			return
 		}
-		args := []string{filepath.Join(root, f.Rel)}
-		if action == "reveal" {
-			args = append([]string{"-R"}, args...)
+		target := filepath.Join(root, f.Rel)
+		switch {
+		case action == "reveal" && runtime.GOOS == "darwin":
+			exec.Command("open", "-R", target).Start()
+		case action == "reveal":
+			openPath(filepath.Dir(target))
+		default:
+			openPath(target)
 		}
-		exec.Command("open", args...).Run()
 		fmt.Fprint(rw, `{"ok":true}`)
 	}))
 
@@ -91,7 +98,16 @@ func serve(root string, files []File, w *gokitPythonWorker, o options) error {
 	url := fmt.Sprintf("http://%s/", ln.Addr())
 	fmt.Printf("\n  viewing  %s   (ctrl-c to stop)\n\n", url)
 	if !o.noOpen {
-		exec.Command("open", url).Start()
+		openPath(url)
 	}
 	return http.Serve(ln, mux)
+}
+
+// openPath opens a file, folder, or URL with the desktop's default app.
+func openPath(target string) {
+	if runtime.GOOS == "darwin" {
+		exec.Command("open", target).Start()
+	} else {
+		exec.Command("xdg-open", target).Start()
+	}
 }

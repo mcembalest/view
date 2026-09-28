@@ -1,4 +1,4 @@
-"""view's ML worker, embedded in the Go binary and run with uv (see gokit_python.go). JSON lines over stdin/stdout.
+"""view's ML worker, embedded in the Go binary and run with uv by kit.Python. JSON lines over stdin/stdout.
 
   {"cmd": "build", "root": ..., "files": [[rel, kind, size, mtime], ...], "models": [...], "text_model": null | name}
       thumbnails + OCR for images, embeddings per model, 3D/2D layouts, EVoC clusters -> root/.view/
